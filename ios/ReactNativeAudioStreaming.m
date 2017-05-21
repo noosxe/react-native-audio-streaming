@@ -27,10 +27,10 @@ RCT_EXPORT_MODULE()
       [self.audioPlayer setDelegate:self];
       self.lastUrlString = @"";
       [NSTimer scheduledTimerWithTimeInterval:0.5 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
-      
+
       NSLog(@"AudioPlayer initialized");
    }
-   
+
    return self;
 }
 
@@ -437,12 +437,54 @@ RCT_EXPORT_METHOD(getStatus: (RCTResponseSenderBlock) callback)
       // TODO Get artwork from stream
       // MPMediaItemArtwork *artwork = [[MPMediaItemArtwork alloc]initWithImage:[UIImage imageNamed:@"webradio1"]];
    
-      NSString* appName = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleName"];
+      MPMediaItemArtwork *artwork = nil;
+      
+      NSString *currentSong = self.currentSong;
+      
+      NSString *songTitle = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleName"];
+      NSString *songArtist = @"";
+      
+      if (currentSong != nil) {
+         NSArray<NSString *> *components = [currentSong componentsSeparatedByString:@" - "];
+         
+         if ([components count] > 1) {
+            songTitle = [components objectAtIndex:1];
+            songArtist = [components objectAtIndex:0];
+         }
+         
+         NSError *error = nil;
+         NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"\\(.*\\)|(feat.)" options:NSRegularExpressionCaseInsensitive error:&error];
+         NSString *cleanSongName = [regex stringByReplacingMatchesInString:currentSong options:0 range:NSMakeRange(0, [currentSong length]) withTemplate:@""];
+
+         NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"https://api.spotify.com/v1/search?q=%@&type=track", [cleanSongName stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]]];
+         NSData *data = [NSData dataWithContentsOfURL:url];
+         NSMutableDictionary *spotifyDict = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+         NSDictionary *tracks = [spotifyDict objectForKey:@"tracks"];
+         NSArray *items = [tracks objectForKey:@"items"];
+         
+         if ([items count] > 0) {
+            NSDictionary *item = [items objectAtIndex:0];
+            NSDictionary *album = [item objectForKey:@"album"];
+            NSArray *images = [album objectForKey:@"images"];
+            
+            if ([images count] > 0) {
+               NSDictionary *image = [images objectAtIndex:0];
+               NSString *url = [image objectForKey:@"url"];
+               
+               NSURL *imageURL = [NSURL URLWithString:url];
+               NSData *imageData = [NSData dataWithContentsOfURL:imageURL];
+               artwork = [[MPMediaItemArtwork alloc]initWithImage:[UIImage imageWithData:imageData]];
+            }
+         }
+      }
+
       NSDictionary *nowPlayingInfo = [NSDictionary dictionaryWithObjectsAndKeys:
-                                      self.currentSong ? self.currentSong : @"", MPMediaItemPropertyAlbumTitle,
-                                      @"", MPMediaItemPropertyAlbumArtist,
-                                      appName ? appName : @"AppName", MPMediaItemPropertyTitle,
-                                      [NSNumber numberWithFloat:isPlaying ? 1.0f : 0.0], MPNowPlayingInfoPropertyPlaybackRate, nil];
+                                      songArtist, MPMediaItemPropertyArtist,
+                                      songTitle, MPMediaItemPropertyTitle,
+                                      artwork, MPMediaItemPropertyArtwork,
+                                      [NSNumber numberWithFloat:isPlaying ? 1.0f : 0.0], MPNowPlayingInfoPropertyPlaybackRate,
+                                      nil];
+
       [MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nowPlayingInfo;
    }
 }
