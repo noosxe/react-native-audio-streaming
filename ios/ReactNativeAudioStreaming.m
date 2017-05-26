@@ -452,28 +452,31 @@ RCT_EXPORT_METHOD(getStatus: (RCTResponseSenderBlock) callback)
             songArtist = [components objectAtIndex:0];
          }
          
-         NSError *error = nil;
-         NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"\\(.*\\)|(feat.)" options:NSRegularExpressionCaseInsensitive error:&error];
-         NSString *cleanSongName = [regex stringByReplacingMatchesInString:currentSong options:0 range:NSMakeRange(0, [currentSong length]) withTemplate:@""];
-
-         NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"https://api.spotify.com/v1/search?q=%@&type=track", [cleanSongName stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]]];
+         NSURL *url = [NSURL URLWithString:[NSString stringWithFormat:@"http://ws.audioscrobbler.com/2.0/?method=track.search&track=%@&api_key=bdb6b949d36206ecf3a4b9b51f9878d9&format=json", [currentSong stringByAddingPercentEncodingWithAllowedCharacters:[NSCharacterSet URLQueryAllowedCharacterSet]]]];
          NSData *data = [NSData dataWithContentsOfURL:url];
          NSMutableDictionary *spotifyDict = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
-         NSDictionary *tracks = [spotifyDict objectForKey:@"tracks"];
-         NSArray *items = [tracks objectForKey:@"items"];
-         
+         NSDictionary *results = [spotifyDict objectForKey:@"results"];
+         NSDictionary *trackmatches = [results objectForKey:@"trackmatches"];
+         NSArray *items = [trackmatches objectForKey:@"track"];
+
          if ([items count] > 0) {
             NSDictionary *item = [items objectAtIndex:0];
-            NSDictionary *album = [item objectForKey:@"album"];
-            NSArray *images = [album objectForKey:@"images"];
-            
+            NSArray *images = [item objectForKey:@"image"];
+
             if ([images count] > 0) {
-               NSDictionary *image = [images objectAtIndex:0];
-               NSString *url = [image objectForKey:@"url"];
-               
+               NSDictionary *image = [images objectAtIndex:[images count] - 1];
+               NSString *url = [image objectForKey:@"#text"];
+
                NSURL *imageURL = [NSURL URLWithString:url];
                NSData *imageData = [NSData dataWithContentsOfURL:imageURL];
-               artwork = [[MPMediaItemArtwork alloc]initWithImage:[UIImage imageWithData:imageData]];
+               
+               if (imageData != nil) {
+                  UIImage *img = [UIImage imageWithData:imageData];
+                  
+                  if (img != nil) {
+                     artwork = [[MPMediaItemArtwork alloc]initWithImage:img];
+                  }
+               }
             }
          }
       }
