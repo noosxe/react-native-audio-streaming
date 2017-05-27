@@ -311,7 +311,12 @@ public class Signal extends Service implements OnErrorListener,
 
     @Override
     public void playerStarted() {
-        //  TODO
+        //  DON'T DO
+        sendBroadcast(new Intent(Mode.PLAYING));
+
+        remoteViews.setImageViewResource(R.id.btn_streaming_notification_play, android.R.drawable.ic_media_pause);
+        notifyBuilder.setContent(remoteViews);
+        startForeground(NOTIFY_ME_ID, notifyBuilder.build());
     }
 
     @Override
@@ -324,7 +329,6 @@ public class Signal extends Service implements OnErrorListener,
                 //buffering
             } else {
                 this.isPlaying = true;
-                sendBroadcast(new Intent(Mode.PLAYING));
                 //playing
             }
         } else {
@@ -444,7 +448,9 @@ public class Signal extends Service implements OnErrorListener,
         this.isPreparingStarted = false;
         sendBroadcast(new Intent(Mode.STOPPED));
         //  TODO
+
+        remoteViews.setImageViewResource(R.id.btn_streaming_notification_play, android.R.drawable.ic_media_play);
+        notifyBuilder.setContent(remoteViews);
+        startForeground(NOTIFY_ME_ID, notifyBuilder.build());
     }
-
-
 }
