@@ -357,6 +357,16 @@ public class Signal extends Service implements OnErrorListener,
         }
     }
 
+    private void updateNotification(String title, Bitmap bitmap) {
+        if (bitmap != null) {
+            remoteViews.setImageViewBitmap(R.id.streaming_icon, bitmap);
+        }
+
+        remoteViews.setTextViewText(R.id.song_name_notification, title);
+        notifyBuilder.setContent(remoteViews);
+        notifyManager.notify(NOTIFY_ME_ID, notifyBuilder.build());
+    }
+
     @Override
     public void playerMetadata(final String key, final String value) {
         Intent metaIntent = new Intent(Mode.METADATA_UPDATED);
@@ -368,67 +378,59 @@ public class Signal extends Service implements OnErrorListener,
         String url = "http://ws.audioscrobbler.com/2.0/?method=track.search&track=" + value
                 + "&api_key=bdb6b949d36206ecf3a4b9b51f9878d9&format=json";
 
-        StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
-                new Response.Listener<String>() {
-                    @Override
-                    public void onResponse(String response) {
-                        try {
-                            JSONObject reader = new JSONObject(response);
-                            JSONObject results = reader.getJSONObject("results");
-                            JSONObject trackmatches = results.getJSONObject("trackmatches");
-                            JSONArray track = trackmatches.getJSONArray("track");
+        if (key != null && key.equals("StreamTitle") && remoteViews != null && value != null) {
+            StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
+                    new Response.Listener<String>() {
+                        @Override
+                        public void onResponse(String response) {
+                            try {
+                                JSONObject reader = new JSONObject(response);
+                                JSONObject results = reader.getJSONObject("results");
+                                JSONObject trackmatches = results.getJSONObject("trackmatches");
+                                JSONArray track = trackmatches.getJSONArray("track");
 
-                            if (track.length() > 0) {
-                                JSONObject item = track.getJSONObject(0);
-                                JSONArray images = item.getJSONArray("image");
+                                if (track.length() > 0) {
+                                    JSONObject item = track.getJSONObject(0);
+                                    JSONArray images = item.getJSONArray("image");
 
-                                if (images.length() > 0) {
-                                    JSONObject image = images.getJSONObject(1);
-                                    final String url = image.getString("#text");
+                                    if (images.length() > 0) {
+                                        JSONObject image = images.getJSONObject(1);
+                                        final String url = image.getString("#text");
 
-                                    ImageRequest request = new ImageRequest(url,
-                                            new Response.Listener<Bitmap>() {
-                                                @Override
-                                                public void onResponse(Bitmap bitmap) {
-                                                    Log.v("##URL", url);
+                                        ImageRequest request = new ImageRequest(url,
+                                                new Response.Listener<Bitmap>() {
+                                                    @Override
+                                                    public void onResponse(Bitmap bitmap) {
+                                                        Log.v("##URL", url);
 
-                                                    if (key != null && key.equals("StreamTitle") && remoteViews != null && value != null) {
-                                                        remoteViews.setImageViewBitmap(R.id.streaming_icon, bitmap);
-                                                        remoteViews.setTextViewText(R.id.song_name_notification, value);
-                                                        notifyBuilder.setContent(remoteViews);
-                                                        notifyManager.notify(NOTIFY_ME_ID, notifyBuilder.build());
+                                                        updateNotification(value, bitmap);
                                                     }
-                                                }
-                                            }, 0, 0, null,
-                                            new Response.ErrorListener() {
-                                                public void onErrorResponse(VolleyError error) {
+                                                }, 0, 0, null,
+                                                new Response.ErrorListener() {
+                                                    public void onErrorResponse(VolleyError error) {
+                                                        updateNotification(value, null);
+                                                    }
+                                                });
 
-                                                }
-                                            });
-
-                                    queue.add(request);
+                                        queue.add(request);
+                                    }
                                 }
+
+                            } catch (JSONException e) {
+                                e.printStackTrace();
+
+                                updateNotification(value, null);
                             }
-
-                        } catch (JSONException e) {
-                            e.printStackTrace();
                         }
-                    }
-                }, new Response.ErrorListener() {
-            @Override
-            public void onErrorResponse(VolleyError error) {
+                    }, new Response.ErrorListener() {
+                @Override
+                public void onErrorResponse(VolleyError error) {
+                    updateNotification(value, null);
+                }
+            });
 
-            }
-        });
-
-        queue.add(stringRequest);
-
-
-//        if (key != null && key.equals("StreamTitle") && remoteViews != null && value != null) {
-//            remoteViews.setTextViewText(R.id.song_name_notification, value);
-//            notifyBuilder.setContent(remoteViews);
-//            notifyManager.notify(NOTIFY_ME_ID, notifyBuilder.build());
-//        }
+            queue.add(stringRequest);
+        }
     }
 
     @Override
