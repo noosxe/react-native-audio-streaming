@@ -217,7 +217,7 @@ public class Signal extends Service implements OnErrorListener,
 
     public void clearNotification() {
         if (notifyManager != null)
-            notifyManager.cancel(NOTIFY_ME_ID);
+            stopForeground(true);
     }
 
     public void exitNotification() {
@@ -364,7 +364,7 @@ public class Signal extends Service implements OnErrorListener,
 
         remoteViews.setTextViewText(R.id.song_name_notification, title);
         notifyBuilder.setContent(remoteViews);
-        notifyManager.notify(NOTIFY_ME_ID, notifyBuilder.build());
+        startForeground(NOTIFY_ME_ID, notifyBuilder.build());
     }
 
     @Override
