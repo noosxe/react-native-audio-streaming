@@ -6,6 +6,8 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.media.AudioTrack;
 import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnCompletionListener;
@@ -14,6 +16,7 @@ import android.media.MediaPlayer.OnInfoListener;
 import android.media.MediaPlayer.OnPreparedListener;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.Uri;
 import android.os.Binder;
 import android.os.Handler;
 import android.os.IBinder;
@@ -21,10 +24,27 @@ import android.support.v4.app.NotificationCompat;
 import android.support.v4.app.TaskStackBuilder;
 import android.telephony.PhoneStateListener;
 import android.telephony.TelephonyManager;
+import android.util.Log;
 import android.widget.RemoteViews;
 
+import com.android.volley.Request;
+import com.android.volley.RequestQueue;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.ImageRequest;
+import com.android.volley.toolbox.StringRequest;
+import com.android.volley.toolbox.Volley;
 import com.spoledge.aacdecoder.MultiPlayer;
 import com.spoledge.aacdecoder.PlayerCallback;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 public class Signal extends Service implements OnErrorListener,
         OnCompletionListener,
@@ -322,6 +342,21 @@ public class Signal extends Service implements OnErrorListener,
         //  TODO
     }
 
+    public static Bitmap getBitmapFromURL(String src) {
+        try {
+            URL url = new URL(src);
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setDoInput(true);
+            connection.connect();
+            InputStream input = connection.getInputStream();
+            Bitmap myBitmap = BitmapFactory.decodeStream(input);
+            return myBitmap;
+        } catch (IOException e) {
+            // Log exception
+            return null;
+        }
+    }
+
     @Override
     public void playerMetadata(final String key, final String value) {
         Intent metaIntent = new Intent(Mode.METADATA_UPDATED);
@@ -329,11 +364,71 @@ public class Signal extends Service implements OnErrorListener,
         metaIntent.putExtra("value", value);
         sendBroadcast(metaIntent);
 
-        if (key != null && key.equals("StreamTitle") && remoteViews != null && value != null) {
-            remoteViews.setTextViewText(R.id.song_name_notification, value);
-            notifyBuilder.setContent(remoteViews);
-            notifyManager.notify(NOTIFY_ME_ID, notifyBuilder.build());
-        }
+        final RequestQueue queue = Volley.newRequestQueue(this);
+        String url = "http://ws.audioscrobbler.com/2.0/?method=track.search&track=" + value
+                + "&api_key=bdb6b949d36206ecf3a4b9b51f9878d9&format=json";
+
+        StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
+                new Response.Listener<String>() {
+                    @Override
+                    public void onResponse(String response) {
+                        try {
+                            JSONObject reader = new JSONObject(response);
+                            JSONObject results = reader.getJSONObject("results");
+                            JSONObject trackmatches = results.getJSONObject("trackmatches");
+                            JSONArray track = trackmatches.getJSONArray("track");
+
+                            if (track.length() > 0) {
+                                JSONObject item = track.getJSONObject(0);
+                                JSONArray images = item.getJSONArray("image");
+
+                                if (images.length() > 0) {
+                                    JSONObject image = images.getJSONObject(1);
+                                    final String url = image.getString("#text");
+
+                                    ImageRequest request = new ImageRequest(url,
+                                            new Response.Listener<Bitmap>() {
+                                                @Override
+                                                public void onResponse(Bitmap bitmap) {
+                                                    Log.v("##URL", url);
+
+                                                    if (key != null && key.equals("StreamTitle") && remoteViews != null && value != null) {
+                                                        remoteViews.setImageViewBitmap(R.id.streaming_icon, bitmap);
+                                                        remoteViews.setTextViewText(R.id.song_name_notification, value);
+                                                        notifyBuilder.setContent(remoteViews);
+                                                        notifyManager.notify(NOTIFY_ME_ID, notifyBuilder.build());
+                                                    }
+                                                }
+                                            }, 0, 0, null,
+                                            new Response.ErrorListener() {
+                                                public void onErrorResponse(VolleyError error) {
+
+                                                }
+                                            });
+
+                                    queue.add(request);
+                                }
+                            }
+
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }, new Response.ErrorListener() {
+            @Override
+            public void onErrorResponse(VolleyError error) {
+
+            }
+        });
+
+        queue.add(stringRequest);
+
+
+//        if (key != null && key.equals("StreamTitle") && remoteViews != null && value != null) {
+//            remoteViews.setTextViewText(R.id.song_name_notification, value);
+//            notifyBuilder.setContent(remoteViews);
+//            notifyManager.notify(NOTIFY_ME_ID, notifyBuilder.build());
+//        }
     }
 
     @Override
